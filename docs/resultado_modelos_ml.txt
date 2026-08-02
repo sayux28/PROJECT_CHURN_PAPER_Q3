@@ -1,0 +1,251 @@
+=== CÓMO FUNCIONA CADA MODELO (explicación breve) ===
+
+Árbol de Decisión: un único árbol que va haciendo preguntas sucesivas
+sobre las variables (ej. '¿Contract es Month-to-Month?'), eligiendo en
+cada nodo la pregunta que mejor separa Churn de No churn. Es el más
+simple e interpretable de los tres (se puede dibujar y leer directo),
+pero sin limitarlo tiende a memorizar el train (sobreajuste): aprende
+hasta el ruido de los datos de entrenamiento y generaliza peor en test.
+
+Random Forest: entrena muchos árboles de decisión (aquí 100) sobre
+submuestras aleatorias de filas y de columnas (bagging), y promedia sus
+votos. Cada árbol individual puede sobreajustar, pero como ven porciones
+distintas de los datos, sus errores no están correlacionados entre sí y
+se cancelan al promediar -- por eso generaliza mejor que un árbol solo.
+
+LightGBM: también es un ensamble de árboles, pero construidos de forma
+SECUENCIAL en vez de en paralelo (gradient boosting): cada árbol nuevo
+se entrena específicamente para corregir los errores que dejó el
+conjunto de árboles anteriores. Suele lograr igual o mejor desempeño que
+Random Forest con menos árboles y entrena más rápido, a cambio de ser
+más sensible a sobreajustar si no se regula (learning_rate, profundidad).
+
+Regresión Logística: estima la probabilidad de churn como una
+combinación lineal de las variables (ya escaladas con StandardScaler y
+codificadas con OneHotEncoder) pasada por una función sigmoide. A
+diferencia de los árboles, SÍ le importa la escala/orden de los números,
+por eso usa one-hot en vez de codificación ordinal. Es el más simple e
+interpretable en términos de coeficientes, pero solo captura relaciones
+lineales entre las variables (ya escaladas/codificadas) y el target.
+
+=== QUÉ SIGNIFICA CADA MÉTRICA (para churn específicamente) ===
+- Accuracy: % total de aciertos. Engañosa aquí por el desbalance de
+  clases (71.6% no-churn): un modelo que dijera "nadie se va" ya
+  tendría ~72% de accuracy sin detectar ni un solo churner.
+- Precision (Churn): de los clientes que el modelo marcó como "se va a
+  ir", ¿qué % realmente se fue? Importa para no gastar presupuesto de
+  retención en clientes que no pensaban irse.
+- Recall (Churn): de los clientes que SÍ se fueron, ¿qué % detectó el
+  modelo? Es la métrica más crítica del negocio -- cada churner no
+  detectado es un cliente perdido sin ningún intento de retención.
+- F1 (Churn): balance entre precision y recall (media armónica).
+- ROC-AUC: qué tan bien el modelo separa churn de no-churn en general,
+  sin depender de un umbral de decisión fijo (0.5 = azar, 1.0 = perfecto).
+- Accuracy train vs. test: la brecha entre ambas mide sobreajuste --
+  mientras más grande la diferencia, más memorizó el train en vez de
+  aprender un patrón que generaliza.
+
+===== Árbol de Decisión =====
+Tiempo de entrenamiento: 0.028 s
+              precision    recall  f1-score   support
+
+    No churn       0.85      0.85      0.85       944
+       Churn       0.62      0.64      0.63       374
+
+    accuracy                           0.79      1318
+   macro avg       0.74      0.74      0.74      1318
+weighted avg       0.79      0.79      0.79      1318
+
+ROC-AUC: 0.741
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              799          145
+Real Churn                 136          238
+Accuracy train: 1.000 | Accuracy test: 0.787 | brecha: 0.213
+
+===== Random Forest =====
+Tiempo de entrenamiento: 0.451 s
+              precision    recall  f1-score   support
+
+    No churn       0.89      0.90      0.89       944
+       Churn       0.74      0.72      0.73       374
+
+    accuracy                           0.85      1318
+   macro avg       0.81      0.81      0.81      1318
+weighted avg       0.85      0.85      0.85      1318
+
+ROC-AUC: 0.919
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              848           96
+Real Churn                 104          270
+Accuracy train: 0.998 | Accuracy test: 0.848 | brecha: 0.150
+
+===== LightGBM =====
+Tiempo de entrenamiento: 2.938 s
+              precision    recall  f1-score   support
+
+    No churn       0.90      0.90      0.90       944
+       Churn       0.74      0.75      0.75       374
+
+    accuracy                           0.86      1318
+   macro avg       0.82      0.82      0.82      1318
+weighted avg       0.86      0.86      0.86      1318
+
+ROC-AUC: 0.925
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              846           98
+Real Churn                  93          281
+Accuracy train: 0.960 | Accuracy test: 0.855 | brecha: 0.105
+
+===== Regresión Logística =====
+Tiempo de entrenamiento: 0.021 s
+              precision    recall  f1-score   support
+
+    No churn       0.94      0.81      0.87       944
+       Churn       0.64      0.86      0.74       374
+
+    accuracy                           0.82      1318
+   macro avg       0.79      0.84      0.80      1318
+weighted avg       0.85      0.82      0.83      1318
+
+ROC-AUC: 0.913
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              763          181
+Real Churn                  51          323
+Accuracy train: 0.822 | Accuracy test: 0.824 | brecha: -0.002
+
+=== TABLA COMPARATIVA (4 modelos) ===
+                     Accuracy (train)  Accuracy (test)  Precision (Churn)  Recall (Churn)  F1 (Churn)  Precision (w)  Recall (w)  F1 (w)  ROC-AUC  Tiempo (s)
+Modelo                                                                                                                                                       
+Árbol de Decisión               1.000            0.787              0.621           0.636       0.629          0.788       0.787   0.788    0.741       0.028
+Random Forest                   0.998            0.848              0.738           0.722       0.730          0.847       0.848   0.848    0.919       0.451
+LightGBM                        0.960            0.855              0.741           0.751       0.746          0.856       0.855   0.855    0.925       2.938
+Regresión Logística             0.822            0.824              0.641           0.864       0.736          0.853       0.824   0.830    0.913       0.021
+
+=== INTERPRETACIÓN ===
+- Mejor recall detectando churn: Regresión Logística (0.864) -- el más relevante para el negocio, ya que minimiza clientes que se van sin ningún intento de retención.
+- Mejor separación general de clases (ROC-AUC): LightGBM (0.925).
+- Entrenamiento más rápido: Regresión Logística (0.021 s).
+- Brecha train-test (sobreajuste) por modelo:
+    Árbol de Decisión: 0.213
+    Random Forest: 0.150
+    LightGBM: 0.105
+    Regresión Logística: -0.002
+  Una brecha mayor en el Árbol de Decisión confirma lo esperado: un solo árbol sin restricciones memoriza el train, mientras que los ensambles (RF, LightGBM) y el modelo lineal (Regresión Logística, con menos capacidad para sobreajustar) generalizan mejor.
+
+
+=== AJUSTE DE HIPERPARÁMETROS (árboles) ===
+Árbol de Decisión -> poda por costo-complejidad (ccp_alpha) + GridSearchCV puntual.
+Random Forest y LightGBM -> Optuna (TPE), 5-fold CV, 30 trials cada uno.
+Los 3 optimizan F1 de la clase Churn. La Regresión Logística no se toca.
+
+[Árbol de Decisión] 20 valores de ccp_alpha probados | mejor ccp_alpha: 0.001646 | F1 (Churn) CV: 0.744
+
+[Random Forest] mejores hiperparámetros (Optuna, 30 trials): {'n_estimators': 200, 'max_depth': 15, 'min_samples_split': 2, 'min_samples_leaf': 2, 'max_features': 'sqrt'} | F1 (Churn) CV: 0.772
+
+[LightGBM] mejores hiperparámetros (Optuna, 30 trials, early stopping por fold en AUC de validación, 30 rondas de paciencia): {'num_leaves': 88, 'max_depth': 4, 'learning_rate': 0.21723258805033818, 'min_child_samples': 19, 'subsample': 0.9981126922026226, 'colsample_bytree': 0.9593498997454459, 'reg_alpha': 0.001017952123192674, 'reg_lambda': 0.0067530303810658} | F1 (Churn) CV: 0.778
+[LightGBM] n_estimators final (early stopping sobre partición de validación dedicada, tope 600): 46
+
+===== Árbol de Decisión (ajustado) =====
+Tiempo de entrenamiento: 0.043 s
+              precision    recall  f1-score   support
+
+    No churn       0.90      0.86      0.88       944
+       Churn       0.68      0.76      0.72       374
+
+    accuracy                           0.83      1318
+   macro avg       0.79      0.81      0.80      1318
+weighted avg       0.84      0.83      0.83      1318
+
+ROC-AUC: 0.906
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              811          133
+Real Churn                  89          285
+Accuracy train: 0.854 | Accuracy test: 0.832 | brecha: 0.023
+
+===== Random Forest (ajustado) =====
+Tiempo de entrenamiento: 1.149 s
+              precision    recall  f1-score   support
+
+    No churn       0.90      0.89      0.89       944
+       Churn       0.72      0.75      0.74       374
+
+    accuracy                           0.85      1318
+   macro avg       0.81      0.82      0.82      1318
+weighted avg       0.85      0.85      0.85      1318
+
+ROC-AUC: 0.923
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              836          108
+Real Churn                  92          282
+Accuracy train: 0.966 | Accuracy test: 0.848 | brecha: 0.118
+
+===== LightGBM (ajustado) =====
+Tiempo de entrenamiento: 0.082 s
+              precision    recall  f1-score   support
+
+    No churn       0.92      0.86      0.89       944
+       Churn       0.69      0.82      0.75       374
+
+    accuracy                           0.85      1318
+   macro avg       0.81      0.84      0.82      1318
+weighted avg       0.86      0.85      0.85      1318
+
+ROC-AUC: 0.927
+Matriz de confusión (filas=real, columnas=predicho):
+                 Pred. No churn  Pred. Churn
+Real No churn              809          135
+Real Churn                  69          305
+Accuracy train: 0.889 | Accuracy test: 0.845 | brecha: 0.043
+
+=== HIPERPARÁMETROS FINALES POR MODELO AJUSTADO ===
+(NaN = hiperparámetro no explorado para ese modelo -- cada uno se ajustó con su propio espacio de búsqueda, ver docs/plan_shap_rule_churn_telecom.md, Fase 4b)
+                  ccp_alpha n_estimators max_depth min_samples_split min_samples_leaf max_features num_leaves learning_rate min_child_samples subsample colsample_bytree reg_alpha reg_lambda
+Árbol de Decisión  0.001646          NaN       NaN               NaN              NaN          NaN        NaN           NaN               NaN       NaN              NaN       NaN        NaN
+Random Forest           NaN          200        15                 2                2         sqrt        NaN           NaN               NaN       NaN              NaN       NaN        NaN
+LightGBM                NaN         46.0       4.0               NaN              NaN          NaN       88.0      0.217233              19.0  0.998113          0.95935  0.001018   0.006753
+
+=== COMPARACIÓN: MODELO INICIAL vs. AJUSTADO (árboles) ===
+                           Inicial                                                                                                                        Ajustado                                                                                                               
+                  Accuracy (train) Accuracy (test) Precision (Churn) Recall (Churn) F1 (Churn) Precision (w) Recall (w) F1 (w) ROC-AUC Tiempo (s) Accuracy (train) Accuracy (test) Precision (Churn) Recall (Churn) F1 (Churn) Precision (w) Recall (w) F1 (w) ROC-AUC Tiempo (s)
+Árbol de Decisión            1.000           0.787             0.621          0.636      0.629         0.788      0.787  0.788   0.741      0.028            0.854           0.832             0.682          0.762      0.720         0.839      0.832  0.834   0.906      0.043
+Random Forest                0.998           0.848             0.738          0.722      0.730         0.847      0.848  0.848   0.919      0.451            0.966           0.848             0.723          0.754      0.738         0.850      0.848  0.849   0.923      1.149
+LightGBM                     0.960           0.855             0.741          0.751      0.746         0.856      0.855  0.855   0.925      2.938            0.889           0.845             0.693          0.816      0.749         0.857      0.845  0.849   0.927      0.082
+
+=== ANÁLISIS DE MEJORAS (ajuste de hiperparámetros) ===
+
+Árbol de Decisión:
+  Recall (Churn):    0.636 -> 0.762  (mejora, +0.126)
+  F1 (Churn):        0.629 -> 0.720  (mejora, +0.091)
+  ROC-AUC:           0.741 -> 0.906  (mejora, +0.165)
+  Brecha train-test: 0.213 -> 0.022  (reduce el sobreajuste, -0.191)
+
+Random Forest:
+  Recall (Churn):    0.722 -> 0.754  (mejora, +0.032)
+  F1 (Churn):        0.730 -> 0.738  (mejora, +0.008)
+  ROC-AUC:           0.919 -> 0.923  (mejora, +0.004)
+  Brecha train-test: 0.150 -> 0.118  (reduce el sobreajuste, -0.032)
+
+LightGBM:
+  Recall (Churn):    0.751 -> 0.816  (mejora, +0.065)
+  F1 (Churn):        0.746 -> 0.749  (mejora, +0.003)
+  ROC-AUC:           0.925 -> 0.927  (mejora, +0.002)
+  Brecha train-test: 0.105 -> 0.044  (reduce el sobreajuste, -0.061)
+
+Nota: el ajuste optimiza F1 de la clase Churn vía validación cruzada (5-fold) sobre TRAIN; por eso puede no mejorar todas las métricas simultáneamente sobre TEST (p. ej. puede subir F1/recall a cambio de un ROC-AUC levemente menor, o reducir la brecha train-test sacrificando algo de recall) -- es el trade-off esperado al pasar de una configuración fija a una ajustada específicamente para detectar Churn.
+
+
+=== GRÁFICO ROC-AUC COMPARATIVO ===
+Gráfico guardado en: docs/roc_auc_comparativa.png
+Qué representa: cada curva grafica, para TODOS los umbrales de decisión posibles (no solo 0.5, como las métricas de las tablas anteriores), la Tasa de Verdaderos Positivos (recall: qué % de los churners reales detecta el modelo) contra la Tasa de Falsos Positivos (qué % de los que NO se van el modelo marca por error como churn). Una curva más pegada a la esquina superior izquierda logra más recall con menos falsos positivos en cualquier punto de corte -- por eso el área bajo la curva (AUC) resume en un solo número qué tan bien separa el modelo ambas clases, sin depender de dónde se fije el umbral de decisión. La línea diagonal gris (Azar, AUC = 0.500) es la referencia de un modelo sin poder predictivo (equivalente a tirar una moneda); AUC = 1.000 sería separación perfecta.
+
+=== ANÁLISIS ===
+Ranking por AUC: LightGBM (ajustado) (0.927) > Random Forest (ajustado) (0.923) > Regresión Logística (0.913) > Árbol de Decisión (ajustado) (0.906)
+- LightGBM (ajustado) tiene la curva más cercana a la esquina superior izquierda y el mayor AUC (0.927): en el rango de umbrales donde más importa decidir (para no gastar de más en falsos positivos ni dejar pasar churners), es el que logra más recall por cada punto de falsos positivos que se tolera.
+- Árbol de Decisión (ajustado) tiene el AUC más bajo (0.906) del grupo, aunque la diferencia con el resto es pequeña (0.021) -- las 4 curvas están muy por encima de la diagonal de azar, así que los 4 modelos separan bien las clases en general; la brecha entre ellos importa más para elegir el mejor punto de corte que para descartar a alguno como no apto.
+- El AUC es agnóstico al umbral, así que no sustituye la tabla de Recall/Precision/F1 en 0.5 (o el umbral de negocio que se elija) -- ambas vistas son complementarias: el AUC dice qué modelo separa mejor en general, la tabla dice cómo se comporta ese modelo en el punto de corte que efectivamente se va a usar en producción.
